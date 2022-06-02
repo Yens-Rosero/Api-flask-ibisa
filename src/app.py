@@ -1,129 +1,140 @@
-import re
-from flask import Flask, jsonify, request, Response, _request_ctx_stack
-from flask_pymongo import PyMongo
-from bson import json_util
-from bson.objectid import ObjectId
-from regex import R
-from werkzeug.security import generate_password_hash, check_password_hash
 import json
-from six.moves.urllib.request import urlopen
-from functools import wraps
-from cryptography.hazmat.primitives import serialization
-from flask_cors import cross_origin
-from jose import jwt
-import http.client
+from flask import Flask, request, jsonify
+from flask_pymongo import PyMongo
+from flask_cors import CORS
+import pymongo
+from bson import json_util
 from verify import AuthError, requires_auth, get_tenant
+from bson.objectid import ObjectId
+from flask_cors import cross_origin
+
 
 
 AUTH0_DOMAIN = 'ibisa.auth0.com'
 API_AUDIENCE = 'https://ibisa.co/api'
 ALGORITHMS = ["RS256"]
 
-
 app = Flask(__name__)
+URI = "mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/"
+app.config["MONGO_URI"] = URI+"IbisaTablas"
+mongo = PyMongo(app)
+
+myclient = pymongo.MongoClient(URI)
 
 
-@app.route('/boards/api/v1', methods=['GET'])
+def _create_database(name):
+    mydb = myclient[name[0]]
+    return mydb
+ 
+# Crea la base de datos si no existe, la colección si no existe
+# e inserta el dato.
+@app.route("/api/v1/tablas/", methods=["POST"])
 @cross_origin(headers=["Content-Type", "Authorization"])
 @requires_auth
-def get_users():
+def create_database():
     tenant = get_tenant()
-    app.config['MONGO_URI'] = 'mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/' + \
-        tenant[0]+'?retryWrites=true&w=majority'
-    mongo = PyMongo(app)
-    collection = mongo.db.list_collection_names()
-    collection = json.dumps(collection)
+    mydb = _create_database(tenant)
 
-    print("collections:", collection, "\n")
-    # content = mongo.db[collection].find()
-    # content = json_util.dumps(content)
-    # print("content:", content, "\n")
-    # all = [content, collection]
-    return Response(collection, mimetype="application/json")
+    mycol = mydb[request.json["name"]]
+
+    #a document
+    developer = request.json
+    print(developer)
+    
+    #insert a document to the collection
+    x = mycol.insert_one(developer)
+    return jsonify({"data":f"Objeto creado: {x.inserted_id}","success":True}), 201
 
 
-@app.route('/boards/api/v1', methods=['POST'])
+@app.route("/api/v1/tablas/", methods=["GET"])
 @cross_origin(headers=["Content-Type", "Authorization"])
 @requires_auth
-def create_user():
-    # Receiving Data
+def lista_tablas():
     tenant = get_tenant()
-    app.config['MONGO_URI'] = 'mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/' + \
-        tenant[0]+'?retryWrites=true&w=majority'
 
-    mongo = PyMongo(app)
-    content = request.json['content']
-    # username = request.json['username']
-    # email = request.json['email']
-    # password = request.json['password']
-    id = mongo.db[content].insert(request.json)
-    response = jsonify({
-        '_id': str(id),
-    })
-    response.status_code = 201
+    mydb = _create_database(tenant)
+     
+    # mycol = mydb["Tablas"] 
+     
+    # x = mycol.insert_one({"name":"Tabla1"})
+    
+    collist = mydb.list_collection_names()
+    tablas = []
+    for db in collist:
+        tablas.append({"name": db})
+    return jsonify({"tablas":tablas}), 200
+
+
+@app.route("/api/v1/tablas/<name>", methods=["GET"])
+@cross_origin(headers=["Content-Type", "Authorization"])
+@requires_auth
+def lista_datos_tabla(name):
+    tenant = get_tenant()
+    mydb = _create_database(tenant)
+    mycol = mydb[name]
+    resultado = []
+    for x in mycol.find():
+        if '_id' in x:
+            x['_id'] = str(x['_id'])
+            resultado.append(x)
+    
+    print(resultado)
+    return jsonify({"data":resultado}), 200
+
+@app.route("/api/v1/tablas/<name>", methods=["DELETE"])
+@cross_origin(headers=["Content-Type", "Authorization"])
+@requires_auth
+def elimina_tabla(name):
+    tenant = get_tenant()
+    mydb = _create_database(tenant)
+   
+    mycol = mydb[name]
+    mycol.drop()
+    return jsonify({"data":f"Tabla {name} eliminada"}), 204
+
+@app.route("/api/v1/tablas/<name>/<id>", methods=["DELETE"])
+@cross_origin(headers=["Content-Type", "Authorization"])
+@requires_auth
+def elimina_campo(name,id):
+    tenant = get_tenant()
+    
+    mydb = _create_database(tenant)
+    
+    mycol = mydb[name]
+    
+    myquery = { "_id": ObjectId(id) }
+    mycol.delete_one(myquery)
+    
+    response = jsonify({'data': 'User' + id + 'Eliminado correctamente'}), 204
+    
     return response
 
-
-@app.route('/boards/api/v1/<content>', methods=['GET'])
+    
+@app.route('/api/v1/tablas/<name>/<id>', methods=["PUT"])
 @cross_origin(headers=["Content-Type", "Authorization"])
 @requires_auth
-def get_user(content):
-    print(content)
+def update_user(name, id):
     tenant = get_tenant()
-    app.config['MONGO_URI'] = 'mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/' + \
-        tenant[0]+'?retryWrites=true&w=majority'
-
-    mongo = PyMongo(app)
-    board = mongo.db[content].find()
-    response = json_util.dumps(board)
-    return Response(response, mimetype="application/json")
-
-
-@app.route('/boards/api/v1/<content>', methods=['DELETE'])
-@cross_origin(headers=["Content-Type", "Authorization"])
-@requires_auth
-def delete_user(content):
-    tenant = get_tenant()
-    app.config['MONGO_URI'] = 'mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/' + \
-        tenant[0]+'?retryWrites=true&w=majority'
-    content = request.json['content']
-    mongo = PyMongo(app)
-    print(content, " CONTENT")
-    mongo.db[content].drop({})
-    response = jsonify(
-        {'message': 'content' + content + ' Deleted Successfully'})
-    response.status_code = 200
-    return response
-
-
-@app.route('/boards/api/v1/<content>/<id>', methods=['PUT'])
-@cross_origin(headers=["Content-Type", "Authorization"])
-@requires_auth
-def update_user(content, id):
-    tenant = get_tenant()
-    app.config['MONGO_URI'] = 'mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/' + \
-        tenant[0]+'?retryWrites=true&w=majority'
-    mongo = PyMongo(app)
-    content = request.json['content']
-    data = json_util.dumps(request.json)
-    print(data, " CONTENT")
-    mongo.db[content].update_one(
+    
+    mydb = _create_database(tenant)
+    
+    mycol = mydb[name]
+        
+    mycol.update_one(
         {'_id': ObjectId(id)}, {'$set': request.json})
-    response = jsonify({'message': 'User ' + id + 'Updated Successfuly'})
-    response.status_code = 200
+    
+    response = jsonify({'message': 'User ' + id + ' Updated Successfuly'}) , 200
+
     return response
 
-
-@app.errorhandler(404)
-def not_found(error=None):
-    message = {
-        'message': 'Resource Not Found ' + request.url,
-        'status': 404
-    }
-    response = jsonify(message)
-    response.status_code = 404
+@app.errorhandler(AuthError)
+def handle_auth_error(ex):
+    response = jsonify(ex.error)
+    response.status_code = ex.status_code
     return response
 
-
+    
 if __name__ == "__main__":
-    app.run(debug=True, port=8080)
+    app.run(debug=True , port=8080)
+    
+

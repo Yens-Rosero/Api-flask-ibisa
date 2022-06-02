@@ -3,10 +3,11 @@ import http.client
 import json
 from six.moves.urllib.request import urlopen
 from functools import wraps
-
+from jose.exceptions import JWTError
 from flask import Flask, request, jsonify, _request_ctx_stack
 from flask_cors import cross_origin
 from jose import jwt
+from werkzeug.exceptions import HTTPException
 
 AUTH0_DOMAIN = 'ibisa.auth0.com'
 API_AUDIENCE = 'https://ibisa.co/api'
@@ -19,13 +20,6 @@ class AuthError(Exception):
     def __init__(self, error, status_code):
         self.error = error
         self.status_code = status_code
-
-
-@app.errorhandler(AuthError)
-def handle_auth_error(ex):
-    response = jsonify(ex.error)
-    response.status_code = ex.status_code
-    return response
 
 # Format error response and append status code
 
@@ -101,6 +95,11 @@ def requires_auth(f):
                                 "description":
                                     "Unable to parse authentication"
                                     " token."}, 401)
+            # except JWTError:
+            #     raise HTTPException({"code": "INTERNAL_SERVER_ERROR",
+            #                     "description":
+            #                         "Unable to parse authentication"
+            #                         " token."}, 500)
 
             _request_ctx_stack.top.current_user = payload
 
