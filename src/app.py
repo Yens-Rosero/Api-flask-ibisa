@@ -16,7 +16,7 @@ ALGORITHMS = ["RS256"]
 
 app = Flask(__name__)
 URI = "mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/"
-app.config["MONGO_URI"] = URI+"IbisaTablas"
+app.config["MONGO_URI"] = URI + "IbisaTablas"
 mongo = PyMongo(app)
 
 myclient = pymongo.MongoClient(URI)
