@@ -6,7 +6,7 @@ import pymongo
 from bson import json_util
 from verify import AuthError, requires_auth, get_tenant
 from bson.objectid import ObjectId
-from flask_cors import cross_origin
+from flask_cors import CORS , cross_origin 
 
 
 
@@ -14,10 +14,13 @@ AUTH0_DOMAIN = 'ibisa.auth0.com'
 API_AUDIENCE = 'https://ibisa.co/api'
 ALGORITHMS = ["RS256"]
 
+
 app = Flask(__name__)
-URI = "mongodb+srv://yens:123@cluster.ijc7x.mongodb.net/"
-app.config["MONGO_URI"] = URI + "IbisaTablas"
+# URI = #Aqui va la conexion a la base de datos#
+app.config["MONGO_URI"] = URI + "ibisaTablas"
 mongo = PyMongo(app)
+
+# CORS(app, resources={r"/api/*": {"origins": "https://ibisa20.eastus2.cloudapp.azure.com"}})
 
 myclient = pymongo.MongoClient(URI)
 
@@ -135,6 +138,6 @@ def handle_auth_error(ex):
 
     
 if __name__ == "__main__":
-    app.run(debug=True , port=8080)
+    app.run(debug=True ,  port=8000)
     
 
